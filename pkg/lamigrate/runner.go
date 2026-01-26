@@ -79,17 +79,15 @@ func ApplyUp(ctx context.Context, cfg Config, driver Driver) ([]string, error) {
 		}
 
 		sqlText := strings.TrimSpace(string(content))
-		if sqlText == "" {
-			return nil, fmt.Errorf("migration %s is empty", pending[i].Filename)
-		}
-
 		pending[i].SQL = sqlText
 	}
 
 	if err := driver.WithTransaction(ctx, db, func(tx *sql.Tx) error {
 		for _, migration := range pending {
-			if _, err := tx.ExecContext(ctx, migration.SQL); err != nil {
-				return fmt.Errorf("exec migration %s: %w", migration.Filename, err)
+			if migration.SQL != "" {
+				if _, err := tx.ExecContext(ctx, migration.SQL); err != nil {
+					return fmt.Errorf("exec migration %s: %w", migration.Filename, err)
+				}
 			}
 			if err := driver.InsertMigration(ctx, tx, migration.Key(), stage); err != nil {
 				return fmt.Errorf("record migration %s: %w", migration.Filename, err)
@@ -193,7 +191,11 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 
 			sqlText := strings.TrimSpace(string(content))
 			if sqlText == "" {
-				return fmt.Errorf("migration %s is empty", migration.Filename)
+				if err := driver.DeleteMigration(ctx, tx, name); err != nil {
+					return fmt.Errorf("delete migration %s: %w", migration.Filename, err)
+				}
+				executed = append(executed, migration.Filename)
+				continue
 			}
 
 			if _, err := tx.ExecContext(ctx, sqlText); err != nil {
