@@ -153,19 +153,8 @@ docker run --rm \
 - Публикуем релиз в GitHub Releases.
 - Используем CLI в CI/CD или напрямую в сервисах любого языка.
 
-#### GitHub Releases (автосборка)
 
-В репозитории есть workflow `.github/workflows/release.yml`.
-Он собирает бинарники и публикует их в релиз при пуше тега `v*`.
-
-Пример релиза:
-
-```
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Пример скачивания в Dockerfile:
+## Пример скачивания в Dockerfile:
 
 ```
 ARG LAMIGRATE_VERSION=v0.1.0
