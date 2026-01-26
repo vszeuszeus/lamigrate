@@ -145,9 +145,18 @@ func runUp(cfg *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.timeout)
 	defer cancel()
 
-	if err := lamigrate.ApplyUp(ctx, config.cfg, driver); err != nil {
+	applied, err := lamigrate.ApplyUp(ctx, config.cfg, driver)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
+	}
+
+	if len(applied) == 0 {
+		fmt.Println("no changes")
+		return
+	}
+	for _, name := range applied {
+		fmt.Println(name)
 	}
 }
 
@@ -164,9 +173,18 @@ func runDown(cfg *config, stages int) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.timeout)
 	defer cancel()
 
-	if err := lamigrate.ApplyDown(ctx, config.cfg, driver, stages); err != nil {
+	applied, err := lamigrate.ApplyDown(ctx, config.cfg, driver, stages)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
+	}
+
+	if len(applied) == 0 {
+		fmt.Println("no changes")
+		return
+	}
+	for _, name := range applied {
+		fmt.Println(name)
 	}
 }
 

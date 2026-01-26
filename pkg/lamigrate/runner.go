@@ -10,38 +10,38 @@ import (
 
 // ApplyUp выполняет все новые up-миграции в одной транзакции.
 // Вход: ctx для отмены, cfg с DSN и директорией, реализация driver.
-// Выход: error при ошибках валидации, IO, БД или выполнения миграций.
+// Выход: список выполненных файлов и error при ошибках валидации, IO, БД или выполнения.
 // Назначение: атомарно применить новый stage и записать его в lamigrate.
 // ApplyUp executes all pending up migrations in a single transaction.
 // Input: ctx for cancellation, cfg with DSN and directory, driver implementation.
-// Output: error on validation, IO, DB, or execution failures.
+// Output: list of executed filenames and error on failures.
 // Purpose: atomically apply a new stage and store it in lamigrate.
-func ApplyUp(ctx context.Context, cfg Config, driver Driver) error {
+func ApplyUp(ctx context.Context, cfg Config, driver Driver) ([]string, error) {
 	if cfg.MigrationsDir == "" {
-		return fmt.Errorf("migrations dir is empty")
+		return nil, fmt.Errorf("migrations dir is empty")
 	}
 	if cfg.DSN == "" {
-		return fmt.Errorf("dsn is empty")
+		return nil, fmt.Errorf("dsn is empty")
 	}
 
 	migrations, err := ScanMigrations(cfg.MigrationsDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	db, err := driver.Open(cfg.DSN)
 	if err != nil {
-		return fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
 
 	if err := driver.EnsureSchema(ctx, db); err != nil {
-		return fmt.Errorf("ensure lamigrate schema: %w", err)
+		return nil, fmt.Errorf("ensure lamigrate schema: %w", err)
 	}
 
 	appliedList, err := driver.AppliedMigrations(ctx, db)
 	if err != nil {
-		return fmt.Errorf("read applied migrations: %w", err)
+		return nil, fmt.Errorf("read applied migrations: %w", err)
 	}
 
 	applied := make(map[string]struct{}, len(appliedList))
@@ -63,24 +63,24 @@ func ApplyUp(ctx context.Context, cfg Config, driver Driver) error {
 	}
 
 	if len(pending) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	stage, err := driver.MaxStage(ctx, db)
 	if err != nil {
-		return fmt.Errorf("read max stage: %w", err)
+		return nil, fmt.Errorf("read max stage: %w", err)
 	}
 	stage++
 
 	for i := range pending {
 		content, err := os.ReadFile(pending[i].Path)
 		if err != nil {
-			return fmt.Errorf("read migration %s: %w", pending[i].Filename, err)
+			return nil, fmt.Errorf("read migration %s: %w", pending[i].Filename, err)
 		}
 
 		sqlText := strings.TrimSpace(string(content))
 		if sqlText == "" {
-			return fmt.Errorf("migration %s is empty", pending[i].Filename)
+			return nil, fmt.Errorf("migration %s is empty", pending[i].Filename)
 		}
 
 		pending[i].SQL = sqlText
@@ -97,46 +97,51 @@ func ApplyUp(ctx context.Context, cfg Config, driver Driver) error {
 		}
 		return nil
 	}); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	appliedFiles := make([]string, 0, len(pending))
+	for _, migration := range pending {
+		appliedFiles = append(appliedFiles, migration.Filename)
+	}
+
+	return appliedFiles, nil
 }
 
 // ApplyDown откатывает одну или несколько стадий через down-миграции в одной транзакции.
 // Вход: ctx для отмены, cfg с DSN и директорией, реализация driver,
 // stagesToRollback — количество стадий для отката (1+).
-// Выход: error при ошибках валидации, IO, БД или выполнения; nil при успехе/нет изменений.
+// Выход: список выполненных файлов и error при ошибках валидации, IO, БД или выполнения.
 // Назначение: безопасно откатить последние стадии.
 // ApplyDown rolls back one or more stages using down migrations in one transaction.
 // Input: ctx for cancellation, cfg with DSN and directory, driver implementation,
 // stagesToRollback number of stages to undo (1+).
-// Output: error on validation, IO, DB, or execution failures; nil on success/no-op.
+// Output: list of executed filenames and error on failures.
 // Purpose: safely roll back the latest stages.
-func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback int) error {
+func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback int) ([]string, error) {
 	if stagesToRollback <= 0 {
-		return fmt.Errorf("stages to rollback must be positive")
+		return nil, fmt.Errorf("stages to rollback must be positive")
 	}
 	if cfg.MigrationsDir == "" {
-		return fmt.Errorf("migrations dir is empty")
+		return nil, fmt.Errorf("migrations dir is empty")
 	}
 	if cfg.DSN == "" {
-		return fmt.Errorf("dsn is empty")
+		return nil, fmt.Errorf("dsn is empty")
 	}
 
 	migrations, err := ScanMigrations(cfg.MigrationsDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	db, err := driver.Open(cfg.DSN)
 	if err != nil {
-		return fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
 
 	if err := driver.EnsureSchema(ctx, db); err != nil {
-		return fmt.Errorf("ensure lamigrate schema: %w", err)
+		return nil, fmt.Errorf("ensure lamigrate schema: %w", err)
 	}
 
 	downByName := map[string]Migration{}
@@ -149,10 +154,10 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 
 	stages, err := driver.StagesDesc(ctx, db)
 	if err != nil {
-		return fmt.Errorf("read stages: %w", err)
+		return nil, fmt.Errorf("read stages: %w", err)
 	}
 	if len(stages) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	if stagesToRollback > len(stages) {
@@ -164,15 +169,16 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 	for _, stage := range stages {
 		names, err := driver.MigrationsByStage(ctx, db, stage)
 		if err != nil {
-			return fmt.Errorf("read migrations for stage %d: %w", stage, err)
+			return nil, fmt.Errorf("read migrations for stage %d: %w", stage, err)
 		}
 		ordered = append(ordered, names...)
 	}
 
 	if len(ordered) == 0 {
-		return nil
+		return nil, nil
 	}
 
+	executed := make([]string, 0, len(ordered))
 	if err := driver.WithTransaction(ctx, db, func(tx *sql.Tx) error {
 		for _, name := range ordered {
 			migration, ok := downByName[name]
@@ -197,13 +203,15 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 			if err := driver.DeleteMigration(ctx, tx, name); err != nil {
 				return fmt.Errorf("delete migration %s: %w", migration.Filename, err)
 			}
+
+			executed = append(executed, migration.Filename)
 		}
 		return nil
 	}); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return executed, nil
 }
 
 // ListApplied возвращает список применённых миграций со stage.
