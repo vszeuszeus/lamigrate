@@ -6,18 +6,24 @@ import (
 	"fmt"
 
 	// Регистрируем драйвер Postgres.
+	// Register the Postgres driver.
 	_ "github.com/lib/pq"
 
 	"lamigrate/pkg/lamigrate"
 )
 
 // Driver реализует драйвер миграций для Postgres.
+// Driver implements the Postgres migrations driver.
 type Driver struct{}
 
 // New создаёт новый экземпляр драйвера Postgres.
 // Вход: нет.
 // Выход: указатель на Driver.
 // Назначение: конструктор для регистрации в CLI.
+// New creates a new Postgres driver instance.
+// Input: none.
+// Output: pointer to Driver.
+// Purpose: constructor for CLI registration.
 func New() *Driver {
 	return &Driver{}
 }
@@ -26,6 +32,10 @@ func New() *Driver {
 // Вход: нет.
 // Выход: строка имени драйвера.
 // Назначение: идентификация драйвера в CLI и конфигах.
+// Name returns the driver name.
+// Input: none.
+// Output: driver name string.
+// Purpose: identify the driver in CLI and configs.
 func (d *Driver) Name() string {
 	return "postgres"
 }
@@ -34,6 +44,10 @@ func (d *Driver) Name() string {
 // Вход: строка DSN.
 // Выход: *sql.DB или error.
 // Назначение: создать подключение для выполнения миграций.
+// Open opens a Postgres connection.
+// Input: DSN string.
+// Output: *sql.DB or error.
+// Purpose: create a connection for running migrations.
 func (d *Driver) Open(dsn string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -52,6 +66,10 @@ func (d *Driver) Open(dsn string) (*sql.DB, error) {
 // Вход: ctx для отмены, db соединение.
 // Выход: error при ошибке создания.
 // Назначение: подготовить хранилище стадий.
+// EnsureSchema creates lamigrate table if missing.
+// Input: ctx for cancellation, db connection.
+// Output: error on creation failure.
+// Purpose: prepare storage for stages.
 func (d *Driver) EnsureSchema(ctx context.Context, db *sql.DB) error {
 	query := `
 CREATE TABLE IF NOT EXISTS lamigrate (
@@ -70,6 +88,10 @@ CREATE TABLE IF NOT EXISTS lamigrate (
 // Вход: ctx для отмены, db соединение.
 // Выход: список AppliedMigration или error.
 // Назначение: показать статус и проверить, что ещё не выполнено.
+// AppliedMigrations returns applied migrations ordered by stage and id.
+// Input: ctx for cancellation, db connection.
+// Output: list of AppliedMigration or error.
+// Purpose: show status and detect pending migrations.
 func (d *Driver) AppliedMigrations(ctx context.Context, db *sql.DB) ([]lamigrate.AppliedMigration, error) {
 	rows, err := db.QueryContext(ctx, `SELECT migration, stage FROM lamigrate ORDER BY stage ASC, id ASC`)
 	if err != nil {
@@ -102,6 +124,10 @@ func (d *Driver) AppliedMigrations(ctx context.Context, db *sql.DB) ([]lamigrate
 // Вход: ctx для отмены, db соединение.
 // Выход: максимальный stage или 0 если записей нет; error при ошибке.
 // Назначение: вычислить следующий stage для batch apply.
+// MaxStage returns the maximum stage.
+// Input: ctx for cancellation, db connection.
+// Output: max stage or 0 if none; error on failure.
+// Purpose: compute next stage for batch apply.
 func (d *Driver) MaxStage(ctx context.Context, db *sql.DB) (int, error) {
 	var maxStage sql.NullInt64
 	if err := db.QueryRowContext(ctx, `SELECT MAX(stage) FROM lamigrate`).Scan(&maxStage); err != nil {
@@ -117,6 +143,10 @@ func (d *Driver) MaxStage(ctx context.Context, db *sql.DB) (int, error) {
 // Вход: ctx для отмены, db соединение.
 // Выход: список стадий по убыванию или error.
 // Назначение: определить порядок отката down-миграций.
+// StagesDesc returns stages in descending order.
+// Input: ctx for cancellation, db connection.
+// Output: list of stages (desc) or error.
+// Purpose: determine down rollback order.
 func (d *Driver) StagesDesc(ctx context.Context, db *sql.DB) ([]int, error) {
 	rows, err := db.QueryContext(ctx, `SELECT DISTINCT stage FROM lamigrate ORDER BY stage DESC`)
 	if err != nil {
@@ -142,6 +172,10 @@ func (d *Driver) StagesDesc(ctx context.Context, db *sql.DB) ([]int, error) {
 // Вход: ctx для отмены, db соединение, номер stage.
 // Выход: список имён миграций или error.
 // Назначение: откатывать stage в порядке, обратном применению.
+// MigrationsByStage returns migrations for a stage in reverse order.
+// Input: ctx for cancellation, db connection, stage number.
+// Output: list of migration names or error.
+// Purpose: rollback a stage in reverse apply order.
 func (d *Driver) MigrationsByStage(ctx context.Context, db *sql.DB, stage int) ([]string, error) {
 	rows, err := db.QueryContext(ctx, `SELECT migration FROM lamigrate WHERE stage = $1 ORDER BY id DESC`, stage)
 	if err != nil {
@@ -167,6 +201,10 @@ func (d *Driver) MigrationsByStage(ctx context.Context, db *sql.DB, stage int) (
 // Вход: ctx для отмены, db соединение, функция.
 // Выход: error при ошибке транзакции или функции.
 // Назначение: объединить несколько операций в одну атомарную.
+// WithTransaction runs a function inside a transaction.
+// Input: ctx for cancellation, db connection, function.
+// Output: error if transaction or function fails.
+// Purpose: group multiple operations into a single atomic unit.
 func (d *Driver) WithTransaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -185,6 +223,10 @@ func (d *Driver) WithTransaction(ctx context.Context, db *sql.DB, fn func(*sql.T
 // Вход: ctx для отмены, tx транзакция, имя миграции, номер stage.
 // Выход: error при ошибке вставки.
 // Назначение: сохранить информацию о применённой миграции.
+// InsertMigration records an applied migration.
+// Input: ctx for cancellation, tx transaction, migration name, stage number.
+// Output: error on insert failure.
+// Purpose: persist applied migration info.
 func (d *Driver) InsertMigration(ctx context.Context, tx *sql.Tx, migrationName string, stage int) error {
 	_, err := tx.ExecContext(
 		ctx,
@@ -199,6 +241,10 @@ func (d *Driver) InsertMigration(ctx context.Context, tx *sql.Tx, migrationName 
 // Вход: ctx для отмены, tx транзакция, имя миграции.
 // Выход: error при ошибке удаления.
 // Назначение: убрать отметку о применении при откате.
+// DeleteMigration removes a migration record.
+// Input: ctx for cancellation, tx transaction, migration name.
+// Output: error on delete failure.
+// Purpose: remove applied marker during rollback.
 func (d *Driver) DeleteMigration(ctx context.Context, tx *sql.Tx, migrationName string) error {
 	_, err := tx.ExecContext(
 		ctx,

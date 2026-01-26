@@ -15,6 +15,10 @@ var migrationPattern = regexp.MustCompile(`^(\d{14})_(.+)\.(up|down)\.sql$`)
 // Вход: путь к директории с миграциями.
 // Выход: упорядоченный список Migration или error при IO/валидации.
 // Назначение: получить детерминированный список для apply/rollback.
+// ScanMigrations reads a directory and parses files into migration metadata.
+// Input: path to migrations directory.
+// Output: ordered list of Migration or error on IO/validation.
+// Purpose: build a deterministic list for apply/rollback.
 func ScanMigrations(dir string) ([]Migration, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

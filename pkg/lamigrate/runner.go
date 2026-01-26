@@ -12,6 +12,10 @@ import (
 // Вход: ctx для отмены, cfg с DSN и директорией, реализация driver.
 // Выход: error при ошибках валидации, IO, БД или выполнения миграций.
 // Назначение: атомарно применить новый stage и записать его в lamigrate.
+// ApplyUp executes all pending up migrations in a single transaction.
+// Input: ctx for cancellation, cfg with DSN and directory, driver implementation.
+// Output: error on validation, IO, DB, or execution failures.
+// Purpose: atomically apply a new stage and store it in lamigrate.
 func ApplyUp(ctx context.Context, cfg Config, driver Driver) error {
 	if cfg.MigrationsDir == "" {
 		return fmt.Errorf("migrations dir is empty")
@@ -104,6 +108,11 @@ func ApplyUp(ctx context.Context, cfg Config, driver Driver) error {
 // stagesToRollback — количество стадий для отката (1+).
 // Выход: error при ошибках валидации, IO, БД или выполнения; nil при успехе/нет изменений.
 // Назначение: безопасно откатить последние стадии.
+// ApplyDown rolls back one or more stages using down migrations in one transaction.
+// Input: ctx for cancellation, cfg with DSN and directory, driver implementation,
+// stagesToRollback number of stages to undo (1+).
+// Output: error on validation, IO, DB, or execution failures; nil on success/no-op.
+// Purpose: safely roll back the latest stages.
 func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback int) error {
 	if stagesToRollback <= 0 {
 		return fmt.Errorf("stages to rollback must be positive")
@@ -201,6 +210,10 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 // Вход: ctx для отмены, cfg с DSN, реализация driver.
 // Выход: список применённых миграций (может быть пустым) или error.
 // Назначение: показать статус без выполнения миграций.
+// ListApplied returns applied migrations with their stage.
+// Input: ctx for cancellation, cfg with DSN, driver implementation.
+// Output: list of applied migrations (may be empty) or error.
+// Purpose: show status without running migrations.
 func ListApplied(ctx context.Context, cfg Config, driver Driver) ([]AppliedMigration, error) {
 	if cfg.DSN == "" {
 		return nil, fmt.Errorf("dsn is empty")

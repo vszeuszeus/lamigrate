@@ -7,6 +7,8 @@ import (
 
 // Driver определяет операции для конкретной БД.
 // Назначение: абстрагировать различия между СУБД.
+// Driver defines database-specific operations.
+// Purpose: abstract differences between database backends.
 type Driver interface {
 	Name() string
 	Open(dsn string) (*sql.DB, error)
@@ -22,6 +24,8 @@ type Driver interface {
 
 // AppliedMigration — запись о применённой миграции со stage.
 // Назначение: отдавать список применённых миграций для status/планирования.
+// AppliedMigration is a stored migration record with stage.
+// Purpose: return applied migrations for status/planning.
 type AppliedMigration struct {
 	Migration string
 	Stage     int

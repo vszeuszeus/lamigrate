@@ -36,21 +36,35 @@ stage    INT NOT NULL
 Применяет все новые `up`-миграции одной транзакцией и пишет stage.
 
 ```
-go run ./cmd/lamigrate -command up -dir ./migrations -driver postgres -dsn "..."
+go run ./cmd/lamigrate up -dir ./migrations -driver postgres -dsn "..."
 ```
 
 ### `down`
 Откатывает 1 или N последних стадий (в обратном порядке) одной транзакцией.
 
 ```
-go run ./cmd/lamigrate -command down -stages 2 -dir ./migrations -driver postgres -dsn "..."
+go run ./cmd/lamigrate down -stages 2 -dir ./migrations -driver postgres -dsn "..."
 ```
 
 ### `status`
 Показывает список применённых миграций с их stage.
 
 ```
-go run ./cmd/lamigrate -command status -driver postgres -dsn "..."
+go run ./cmd/lamigrate status -driver postgres -dsn "..."
+```
+
+### `version`
+Показывает версию CLI.
+
+```
+go run ./cmd/lamigrate version
+```
+
+### `help`
+Показывает справку по CLI.
+
+```
+go run ./cmd/lamigrate help
 ```
 
 Пример вывода:
@@ -77,6 +91,11 @@ stage=2 migration=20250102120000_add_orders
 - `LAMIGRATE_DSN` — строка подключения к БД
 - `LAMIGRATE_DRIVER` — имя драйвера (по умолчанию `postgres`)
 - `LAMIGRATE_MIGRATIONS_DIR` — путь к директории миграций
+- `POSTGRES_HOST` — хост Postgres (используется если `LAMIGRATE_DSN` не задан)
+- `POSTGRES_PORT` — порт Postgres (по умолчанию `5432`)
+- `POSTGRES_USER` — пользователь Postgres
+- `POSTGRES_PASSWORD` — пароль Postgres
+- `POSTGRES_DB` — база Postgres
 
 ## Как запустить
 
@@ -89,8 +108,7 @@ stage=2 migration=20250102120000_add_orders
 ### Быстрый старт (go run)
 
 ```
-go run ./cmd/lamigrate \
-  -command up \
+go run ./cmd/lamigrate up \
   -dir ./migrations \
   -driver postgres \
   -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
@@ -99,13 +117,13 @@ go run ./cmd/lamigrate \
 Проверка статуса:
 
 ```
-go run ./cmd/lamigrate -command status -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
+go run ./cmd/lamigrate status -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
 ```
 
 Откат последней стадии:
 
 ```
-go run ./cmd/lamigrate -command down -stages 1 -dir ./migrations -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
+go run ./cmd/lamigrate down -stages 1 -dir ./migrations -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
 ```
 
 ### Сборка бинарника
@@ -117,7 +135,7 @@ go build -o ./bin/lamigrate ./cmd/lamigrate
 Запуск бинарника:
 
 ```
-./bin/lamigrate -command up -dir ./migrations -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
+./bin/lamigrate up -dir ./migrations -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
 ```
 
 ### Docker
@@ -136,7 +154,7 @@ docker run --rm \
   -e LAMIGRATE_DRIVER=postgres \
   -e LAMIGRATE_MIGRATIONS_DIR=/migrations \
   -v "$PWD/migrations:/migrations:ro" \
-  lamigrate:local -command up
+  lamigrate:local up
 ```
 
 Статус:
@@ -144,7 +162,7 @@ docker run --rm \
 ```
 docker run --rm \
   -e LAMIGRATE_DSN="postgres://user:pass@host.docker.internal:5432/db?sslmode=disable" \
-  lamigrate:local -command status
+  lamigrate:local status
 ```
 
 ### Релизный флоу (для использования в других языках)
