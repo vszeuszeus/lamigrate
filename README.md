@@ -111,13 +111,74 @@ go run ./cmd/lamigrate -command down -stages 1 -dir ./migrations -driver postgre
 ### Сборка бинарника
 
 ```
-go build -o lamigrate ./cmd/lamigrate
+go build -o ./bin/lamigrate ./cmd/lamigrate
 ```
 
 Запуск бинарника:
 
 ```
 ./bin/lamigrate -command up -dir ./migrations -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
+```
+
+### Docker
+
+Сборка образа:
+
+```
+docker build -t lamigrate:local .
+```
+
+Запуск (монтируем миграции и передаём env):
+
+```
+docker run --rm \
+  -e LAMIGRATE_DSN="postgres://user:pass@host.docker.internal:5432/db?sslmode=disable" \
+  -e LAMIGRATE_DRIVER=postgres \
+  -e LAMIGRATE_MIGRATIONS_DIR=/migrations \
+  -v "$PWD/migrations:/migrations:ro" \
+  lamigrate:local -command up
+```
+
+Статус:
+
+```
+docker run --rm \
+  -e LAMIGRATE_DSN="postgres://user:pass@host.docker.internal:5432/db?sslmode=disable" \
+  lamigrate:local -command status
+```
+
+### Релизный флоу (для использования в других языках)
+
+- Собираем бинарники под OS/ARCH (linux/darwin/windows).
+- Публикуем релиз в GitHub Releases.
+- Используем CLI в CI/CD или напрямую в сервисах любого языка.
+
+#### GitHub Releases (автосборка)
+
+В репозитории есть workflow `.github/workflows/release.yml`.
+Он собирает бинарники и публикует их в релиз при пуше тега `v*`.
+
+Пример релиза:
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Пример скачивания в Dockerfile:
+
+```
+ARG LAMIGRATE_VERSION=v0.1.0
+RUN curl -fsSL -o /usr/local/bin/lamigrate \
+  "https://github.com/<owner>/lamigrate/releases/download/${LAMIGRATE_VERSION}/lamigrate_linux_amd64" \
+  && chmod +x /usr/local/bin/lamigrate
+```
+
+Проверка sha256 (опционально):
+
+```
+curl -fsSL -o /tmp/lamigrate.sha256 \
+  "https://github.com/<owner>/lamigrate/releases/download/${LAMIGRATE_VERSION}/sha256sums.txt"
 ```
 
 ## Поведение по стадиям
