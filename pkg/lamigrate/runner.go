@@ -195,6 +195,7 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 					return fmt.Errorf("delete migration %s: %w", migration.Filename, err)
 				}
 				executed = append(executed, migration.Filename)
+				fmt.Printf("skipped empty migration: %s\n", migration.Filename)
 				continue
 			}
 
