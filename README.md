@@ -53,6 +53,13 @@ go run ./cmd/lamigrate down -stages 2 -dir ./migrations -driver postgres -dsn ".
 go run ./cmd/lamigrate status -driver postgres -dsn "..."
 ```
 
+### `create`
+Создаёт пару файлов миграций (up/down) с текущим временем и указанным именем.
+
+```
+go run ./cmd/lamigrate create add_users
+```
+
 ### `version`
 Показывает версию CLI.
 
@@ -124,6 +131,12 @@ go run ./cmd/lamigrate status -driver postgres -dsn "postgres://user:pass@localh
 
 ```
 go run ./cmd/lamigrate down -stages 1 -dir ./migrations -driver postgres -dsn "postgres://user:pass@localhost:5432/db?sslmode=disable"
+```
+
+Создание миграции:
+
+```
+go run ./cmd/lamigrate create add_users
 ```
 
 ### Сборка бинарника

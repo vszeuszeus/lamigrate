@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ import (
 // Назначение: показывать версию в команде version.
 // version holds the current CLI version.
 // Purpose: print version in the version command.
-var version = "0.1.1"
+var version = "0.1.3"
 
 // main парсит CLI-флаги и запускает нужную команду миграций.
 // Вход: флаги командной строки.
@@ -69,6 +70,14 @@ func handleSubcommand(args []string) {
 	case "status":
 		_ = fs.Parse(args[1:])
 		runStatus(cfg)
+	case "create":
+		nameFlag := fs.String("name", "", "имя миграции (если не указано, берётся первый аргумент)")
+		_ = fs.Parse(args[1:])
+		name := *nameFlag
+		if name == "" && len(fs.Args()) > 0 {
+			name = fs.Args()[0]
+		}
+		runCreate(cfg, name)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
 		printHelp()
@@ -86,8 +95,9 @@ func handleSubcommand(args []string) {
 // Purpose: keep backward compatibility.
 func handleLegacyFlags() {
 	var (
-		command = flag.String("command", "up", "command to run: up, down, status")
+		command = flag.String("command", "up", "command to run: up, down, status, create")
 		stages  = flag.Int("stages", 1, "number of stages to rollback for down")
+		name    = flag.String("name", "", "migration name for create")
 	)
 	cfg := configFlags(flag.CommandLine)
 	flag.Parse()
@@ -99,6 +109,8 @@ func handleLegacyFlags() {
 		runDown(cfg, *stages)
 	case "status":
 		runStatus(cfg)
+	case "create":
+		runCreate(cfg, *name)
 	default:
 		log.Fatalf("unknown command: %s", *command)
 	}
@@ -215,6 +227,26 @@ func runStatus(cfg *config) {
 	}
 }
 
+// runCreate создаёт пару файлов миграции (up/down) с текущей меткой времени.
+// Вход: cfg с флагами/окружением, name имя миграции.
+// Выход: печать результата или завершение при ошибке.
+// Назначение: выполнить команду create.
+// runCreate creates up/down migration files with current timestamp.
+// Input: cfg with flags/env, name of migration.
+// Output: prints result or exits on error.
+// Purpose: execute the create command.
+func runCreate(cfg *config, name string) {
+	_, config := buildConfig(cfg, true)
+	if strings.TrimSpace(name) == "" {
+		fmt.Fprintln(os.Stderr, "migration name is required")
+		os.Exit(1)
+	}
+	if err := createMigrationFiles(config.cfg.MigrationsDir, name); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+}
+
 // resolvedConfig содержит итоговую конфигурацию и таймаут.
 // Назначение: единый контейнер для запуска.
 // resolvedConfig holds the final config and timeout.
@@ -319,6 +351,57 @@ func buildPostgresDSNFromEnv() string {
 	return fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=disable", user, host, port, db)
 }
 
+// createMigrationFiles создаёт файлы up/down миграции по стандартному имени.
+// Вход: migrationsDir и name миграции.
+// Выход: error при ошибке создания.
+// Назначение: генерация заготовок миграций на диске.
+// createMigrationFiles creates up/down migration files with standard naming.
+// Input: migrationsDir and migration name.
+// Output: error on creation failure.
+// Purpose: generate migration templates on disk.
+func createMigrationFiles(migrationsDir, name string) error {
+	timestamp := time.Now().Format("20060102150405")
+	safeName := strings.TrimSpace(name)
+	safeName = strings.ReplaceAll(safeName, " ", "_")
+
+	if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
+		return fmt.Errorf("create migrations dir: %w", err)
+	}
+
+	upFile := fmt.Sprintf("%s_%s.up.sql", timestamp, safeName)
+	downFile := fmt.Sprintf("%s_%s.down.sql", timestamp, safeName)
+
+	upPath := filepath.Join(migrationsDir, upFile)
+	downPath := filepath.Join(migrationsDir, downFile)
+
+	if err := createEmptyFile(upPath); err != nil {
+		return fmt.Errorf("create up migration: %w", err)
+	}
+	if err := createEmptyFile(downPath); err != nil {
+		return fmt.Errorf("create down migration: %w", err)
+	}
+
+	fmt.Println(upFile)
+	fmt.Println(downFile)
+	return nil
+}
+
+// createEmptyFile создаёт пустой файл, если он не существует.
+// Вход: путь к файлу.
+// Выход: error при ошибке создания.
+// Назначение: безопасно создавать файлы миграций.
+// createEmptyFile creates an empty file if it does not exist.
+// Input: file path.
+// Output: error on creation failure.
+// Purpose: safely create migration files.
+func createEmptyFile(path string) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
 // printHelp печатает справку по CLI.
 // Вход: нет.
 // Выход: печатает help в stdout.
@@ -337,14 +420,16 @@ func printHelp() {
   up        применить все новые up-миграции в одной транзакции
   down      откатить последние стадии (по умолчанию 1)
   status    показать применённые миграции
+  create    создать пару файлов миграций (up/down)
   version   показать версию
-  help      показать эту справку
+  help      показать справку
 
 Флаги:
   -dir      путь к директории миграций (по умолчанию ./migrations)
   -driver   имя драйвера (по умолчанию postgres)
   -dsn      строка подключения к БД (или POSTGRES_* по умолчанию)
   -stages   сколько стадий откатить (только для down)
+  -name     имя миграции (для create)
   -timeout  общий таймаут выполнения
 
 Переменные окружения:
@@ -363,5 +448,6 @@ func printHelp() {
   lamigrate up
   lamigrate down -stages 3
   lamigrate status
+  lamigrate create add_users
 `)
 }
