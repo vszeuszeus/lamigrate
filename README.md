@@ -191,6 +191,8 @@ brew tap vszeuszeus/lamigrate
 brew install lamigrate
 ```
 
+Нужен tap-репозиторий `vszeuszeus/homebrew-lamigrate` и опубликованный релиз.
+
 ## Установка через apt-get (Debian/Ubuntu)
 
 Скачайте `.deb` из Releases и установите:
@@ -199,6 +201,8 @@ brew install lamigrate
 sudo apt-get install ./lamigrate_<version>_linux_amd64.deb
 ```
 
+`<version>` — это тег релиза, например `0.1.1`.
+
 ## Установка на Windows
 
 Скачайте архив `.zip` из Releases, распакуйте и добавьте `lamigrate.exe` в PATH.
@@ -206,17 +210,19 @@ sudo apt-get install ./lamigrate_<version>_linux_amd64.deb
 ## Пример скачивания в Dockerfile:
 
 ```
-ARG LAMIGRATE_VERSION=v0.1.0
+ARG LAMIGRATE_VERSION=v0.1.6
 RUN curl -fsSL -o /usr/local/bin/lamigrate \
-  "https://github.com/<owner>/lamigrate/releases/download/${LAMIGRATE_VERSION}/lamigrate_linux_amd64" \
+  "https://github.com/vszeuszeus/lamigrate/releases/download/${LAMIGRATE_VERSION}/lamigrate_linux_amd64" \
   && chmod +x /usr/local/bin/lamigrate
 ```
+
+Замените `LAMIGRATE_VERSION` на свои значения.
 
 Проверка sha256 (опционально):
 
 ```
 curl -fsSL -o /tmp/lamigrate.sha256 \
-  "https://github.com/<owner>/lamigrate/releases/download/${LAMIGRATE_VERSION}/sha256sums.txt"
+  "https://github.com/vszeuzeus/lamigrate/releases/download/${LAMIGRATE_VERSION}/sha256sums.txt"
 ```
 
 ## Поведение по стадиям
