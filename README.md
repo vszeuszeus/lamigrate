@@ -201,7 +201,7 @@ brew install lamigrate
 sudo apt-get install ./lamigrate_<version>_linux_amd64.deb
 ```
 
-`<version>` — это тег релиза, например `0.1.1`.
+`<version>` — это тег релиза, например `0.1.6`.
 
 ## Установка на Windows
 
