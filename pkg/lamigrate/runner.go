@@ -208,6 +208,7 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 			}
 
 			executed = append(executed, migration.Filename)
+			fmt.Printf("rolled back migration: %s\n", migration.Filename)
 		}
 		return nil
 	}); err != nil {

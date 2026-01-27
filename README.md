@@ -184,6 +184,24 @@ docker run --rm \
 - Публикуем релиз в GitHub Releases.
 - Используем CLI в CI/CD или напрямую в сервисах любого языка.
 
+## Установка через Homebrew (macOS)
+
+```
+brew tap vszeuszeus/lamigrate
+brew install lamigrate
+```
+
+## Установка через apt-get (Debian/Ubuntu)
+
+Скачайте `.deb` из Releases и установите:
+
+```
+sudo apt-get install ./lamigrate_<version>_linux_amd64.deb
+```
+
+## Установка на Windows
+
+Скачайте архив `.zip` из Releases, распакуйте и добавьте `lamigrate.exe` в PATH.
 
 ## Пример скачивания в Dockerfile:
 

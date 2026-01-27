@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,26 +20,10 @@ jobs:
         with:
           go-version: "1.22"
 
-      - name: Build binaries
-        env:
-          CGO_ENABLED: 0
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -o dist/lamigrate_linux_amd64 ./cmd/lamigrate
-          GOOS=linux GOARCH=arm64 go build -o dist/lamigrate_linux_arm64 ./cmd/lamigrate
-          GOOS=darwin GOARCH=amd64 go build -o dist/lamigrate_darwin_amd64 ./cmd/lamigrate
-          GOOS=darwin GOARCH=arm64 go build -o dist/lamigrate_darwin_arm64 ./cmd/lamigrate
-          GOOS=windows GOARCH=amd64 go build -o dist/lamigrate_windows_amd64.exe ./cmd/lamigrate
-          (cd dist && sha256sum * > sha256sums.txt)
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
         with:
-          files: |
-            dist/lamigrate_linux_amd64
-            dist/lamigrate_linux_arm64
-            dist/lamigrate_darwin_amd64
-            dist/lamigrate_darwin_arm64
-            dist/lamigrate_windows_amd64.exe
-            dist/sha256sums.txt
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

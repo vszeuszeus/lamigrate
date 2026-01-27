@@ -1,0 +1,70 @@
+project_name: lamigrate
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: lamigrate
+    main: ./cmd/lamigrate
+    binary: lamigrate
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - env.example
+
+nfpms:
+  - id: packages
+    package_name: lamigrate
+    vendor: lamigrate
+    homepage: https://github.com/vszeuszeus/lamigrate
+    maintainer: Stanislav Khomenko <stanislav.khomenko@example.com>
+    description: CLI tool for running staged SQL migrations.
+    license: MIT
+    bindir: /usr/local/bin
+    formats:
+      - deb
+      - rpm
+
+brews:
+  - name: lamigrate
+    homepage: https://github.com/vszeuszeus/lamigrate
+    description: CLI tool for running staged SQL migrations.
+    license: MIT
+    repository:
+      owner: vszeuszeus
+      name: homebrew-lamigrate
+    commit_author:
+      name: lamigrate-bot
+      email: bot@lamigrate.local
+    install: |
+      bin.install "lamigrate"
+    test: |
+      system "#{bin}/lamigrate", "version"
+
+checksum:
+  name_template: "sha256sums.txt"
+
+release:
+  github:
+    owner: vszeuszeus
+    name: lamigrate

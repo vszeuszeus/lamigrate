@@ -157,6 +157,7 @@ func runUp(cfg *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.timeout)
 	defer cancel()
 
+	start := time.Now()
 	applied, err := lamigrate.ApplyUp(ctx, config.cfg, driver)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -165,11 +166,13 @@ func runUp(cfg *config) {
 
 	if len(applied) == 0 {
 		fmt.Println("no changes")
+		fmt.Printf("status: applied 0 migrations in %s\n", time.Since(start).Truncate(time.Millisecond))
 		return
 	}
 	for _, name := range applied {
 		fmt.Println(name)
 	}
+	fmt.Printf("status: applied %d migrations in %s\n", len(applied), time.Since(start).Truncate(time.Millisecond))
 }
 
 // runDown запускает откат стадий.
@@ -185,6 +188,7 @@ func runDown(cfg *config, stages int) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.timeout)
 	defer cancel()
 
+	start := time.Now()
 	applied, err := lamigrate.ApplyDown(ctx, config.cfg, driver, stages)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -193,11 +197,13 @@ func runDown(cfg *config, stages int) {
 
 	if len(applied) == 0 {
 		fmt.Println("no changes")
+		fmt.Printf("status: rolled back 0 migrations in %s\n", time.Since(start).Truncate(time.Millisecond))
 		return
 	}
 	for _, name := range applied {
 		fmt.Println(name)
 	}
+	fmt.Printf("status: rolled back %d migrations in %s\n", len(applied), time.Since(start).Truncate(time.Millisecond))
 }
 
 // runStatus выводит список применённых миграций.
