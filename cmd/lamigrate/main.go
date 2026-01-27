@@ -189,21 +189,30 @@ func runDown(cfg *config, stages int) {
 	defer cancel()
 
 	start := time.Now()
-	applied, err := lamigrate.ApplyDown(ctx, config.cfg, driver, stages)
+	result, err := lamigrate.ApplyDown(ctx, config.cfg, driver, stages)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
-	if len(applied) == 0 {
+	total := len(result.Executed) + len(result.Skipped)
+	if total == 0 {
 		fmt.Println("no changes")
 		fmt.Printf("status: rolled back 0 migrations in %s\n", time.Since(start).Truncate(time.Millisecond))
 		return
 	}
-	for _, name := range applied {
+	for _, name := range result.Executed {
 		fmt.Println(name)
 	}
-	fmt.Printf("status: rolled back %d migrations in %s\n", len(applied), time.Since(start).Truncate(time.Millisecond))
+	for _, name := range result.Skipped {
+		fmt.Println(name)
+	}
+	fmt.Printf(
+		"status: rolled back %d migrations (skipped empty %d) in %s\n",
+		total,
+		len(result.Skipped),
+		time.Since(start).Truncate(time.Millisecond),
+	)
 }
 
 // runStatus выводит список применённых миграций.

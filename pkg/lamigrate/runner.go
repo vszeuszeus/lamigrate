@@ -109,37 +109,37 @@ func ApplyUp(ctx context.Context, cfg Config, driver Driver) ([]string, error) {
 // ApplyDown откатывает одну или несколько стадий через down-миграции в одной транзакции.
 // Вход: ctx для отмены, cfg с DSN и директорией, реализация driver,
 // stagesToRollback — количество стадий для отката (1+).
-// Выход: список выполненных файлов и error при ошибках валидации, IO, БД или выполнения.
+// Выход: результат отката и error при ошибках валидации, IO, БД или выполнения.
 // Назначение: безопасно откатить последние стадии.
 // ApplyDown rolls back one or more stages using down migrations in one transaction.
 // Input: ctx for cancellation, cfg with DSN and directory, driver implementation,
 // stagesToRollback number of stages to undo (1+).
-// Output: list of executed filenames and error on failures.
+// Output: rollback result and error on failures.
 // Purpose: safely roll back the latest stages.
-func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback int) ([]string, error) {
+func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback int) (DownResult, error) {
 	if stagesToRollback <= 0 {
-		return nil, fmt.Errorf("stages to rollback must be positive")
+		return DownResult{}, fmt.Errorf("stages to rollback must be positive")
 	}
 	if cfg.MigrationsDir == "" {
-		return nil, fmt.Errorf("migrations dir is empty")
+		return DownResult{}, fmt.Errorf("migrations dir is empty")
 	}
 	if cfg.DSN == "" {
-		return nil, fmt.Errorf("dsn is empty")
+		return DownResult{}, fmt.Errorf("dsn is empty")
 	}
 
 	migrations, err := ScanMigrations(cfg.MigrationsDir)
 	if err != nil {
-		return nil, err
+		return DownResult{}, err
 	}
 
 	db, err := driver.Open(cfg.DSN)
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return DownResult{}, fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
 
 	if err := driver.EnsureSchema(ctx, db); err != nil {
-		return nil, fmt.Errorf("ensure lamigrate schema: %w", err)
+		return DownResult{}, fmt.Errorf("ensure lamigrate schema: %w", err)
 	}
 
 	downByName := map[string]Migration{}
@@ -152,10 +152,10 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 
 	stages, err := driver.StagesDesc(ctx, db)
 	if err != nil {
-		return nil, fmt.Errorf("read stages: %w", err)
+		return DownResult{}, fmt.Errorf("read stages: %w", err)
 	}
 	if len(stages) == 0 {
-		return nil, nil
+		return DownResult{}, nil
 	}
 
 	if stagesToRollback > len(stages) {
@@ -167,16 +167,17 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 	for _, stage := range stages {
 		names, err := driver.MigrationsByStage(ctx, db, stage)
 		if err != nil {
-			return nil, fmt.Errorf("read migrations for stage %d: %w", stage, err)
+			return DownResult{}, fmt.Errorf("read migrations for stage %d: %w", stage, err)
 		}
 		ordered = append(ordered, names...)
 	}
 
 	if len(ordered) == 0 {
-		return nil, nil
+		return DownResult{}, nil
 	}
 
 	executed := make([]string, 0, len(ordered))
+	skipped := make([]string, 0)
 	if err := driver.WithTransaction(ctx, db, func(tx *sql.Tx) error {
 		for _, name := range ordered {
 			migration, ok := downByName[name]
@@ -194,7 +195,7 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 				if err := driver.DeleteMigration(ctx, tx, name); err != nil {
 					return fmt.Errorf("delete migration %s: %w", migration.Filename, err)
 				}
-				executed = append(executed, migration.Filename)
+				skipped = append(skipped, migration.Filename)
 				fmt.Printf("skipped empty migration: %s\n", migration.Filename)
 				continue
 			}
@@ -212,10 +213,22 @@ func ApplyDown(ctx context.Context, cfg Config, driver Driver, stagesToRollback 
 		}
 		return nil
 	}); err != nil {
-		return nil, err
+		return DownResult{}, err
 	}
 
-	return executed, nil
+	return DownResult{
+		Executed: executed,
+		Skipped:  skipped,
+	}, nil
+}
+
+// DownResult содержит результат отката.
+// Назначение: вернуть список выполненных и пропущенных файлов.
+// DownResult holds rollback results.
+// Purpose: return executed and skipped filenames.
+type DownResult struct {
+	Executed []string
+	Skipped  []string
 }
 
 // ListApplied возвращает список применённых миграций со stage.
