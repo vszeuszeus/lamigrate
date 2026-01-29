@@ -19,7 +19,7 @@ import (
 // Назначение: показывать версию в команде version.
 // version holds the current CLI version.
 // Purpose: print version in the version command.
-var version = "0.1.9"
+var version = "0.1.10"
 
 // main парсит CLI-флаги и запускает нужную команду миграций.
 // Вход: флаги командной строки.
@@ -343,7 +343,7 @@ func runStatus(cfg *config) {
 		fmt.Printf("%s%s%s\n", colorGreen, border, colorReset)
 	}
 
-	printPendingTable := func(rows []string) {
+	printPendingTable := func(rows []string, color string) {
 		header := "migration"
 		width := len(header)
 		for _, name := range rows {
@@ -353,30 +353,43 @@ func runStatus(cfg *config) {
 		}
 
 		border := fmt.Sprintf("+-%s-+", strings.Repeat("-", width))
-		fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
-		fmt.Printf("%s| %-*s |%s\n", colorRed, width, header, colorReset)
-		fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
+		fmt.Printf("%s%s%s\n", color, border, colorReset)
+		fmt.Printf("%s| %-*s |%s\n", color, width, header, colorReset)
+		fmt.Printf("%s%s%s\n", color, border, colorReset)
 
 		if len(rows) == 0 {
-			fmt.Printf("%s| %-*s |%s\n", colorRed, width, "none", colorReset)
-			fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
+			fmt.Printf("%s| %-*s |%s\n", color, width, "none", colorReset)
+			fmt.Printf("%s%s%s\n", color, border, colorReset)
 			return
 		}
 
 		for _, name := range rows {
-			fmt.Printf("%s| %-*s |%s\n", colorRed, width, name, colorReset)
+			fmt.Printf("%s| %-*s |%s\n", color, width, name, colorReset)
 		}
-		fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
+		fmt.Printf("%s%s%s\n", color, border, colorReset)
 	}
 
-	printTitleTable("AppliedMIgrations", colorGreen)
-	printAppliedTable(applied)
-	fmt.Println()
-	printTitleTable("Not Applied Migrations", colorRed)
-	printPendingTable(pending)
-	fmt.Println()
-	printTitleTable("Missing Migrations", colorGray)
-	printPendingTable(missing)
+	if len(applied) == 0 && len(pending) == 0 && len(missing) == 0 {
+		fmt.Println("no migrations applied or pending")
+		return
+	}
+
+	if len(applied) > 0 {
+		printTitleTable("Applied Migrations", colorGreen)
+		printAppliedTable(applied)
+	}
+
+	if len(pending) > 0 {
+		fmt.Println()
+		printTitleTable("Not Applied Migrations", colorRed)
+		printPendingTable(pending, colorRed)
+	}
+
+	if len(missing) > 0 {
+		fmt.Println()
+		printTitleTable("Missing Migrations", colorGray)
+		printPendingTable(missing, colorGray)
+	}
 }
 
 // runCreate создаёт пару файлов миграции (up/down) с текущей меткой времени.
