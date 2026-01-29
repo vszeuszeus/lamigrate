@@ -25,10 +25,12 @@
 id       BIGSERIAL PRIMARY KEY
 migration TEXT NOT NULL UNIQUE
 stage    INT NOT NULL
+executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 ```
 
 - `migration` хранит ключ вида `YYYYMMDDHHMMSS_name`
 - `stage` — номер запуска `up`, в рамках которого были применены миграции
+- `executed_at` — время применения миграции
 
 ## Команды
 
@@ -47,7 +49,7 @@ go run ./cmd/lamigrate down -stages 2 -dir ./migrations -driver postgres -dsn ".
 ```
 
 ### `status`
-Показывает список применённых миграций с их stage.
+Показывает применённые миграции с их `stage` и `executed_at`, а также список ещё не применённых и пропавших из папки.
 
 ```
 go run ./cmd/lamigrate status -driver postgres -dsn "..."
@@ -77,17 +79,17 @@ go run ./cmd/lamigrate help
 Пример вывода:
 
 ```
-stage=1 migration=20250101123000_init_schema
-stage=1 migration=20250101123500_add_users
-stage=2 migration=20250102120000_add_orders
+Applied Migrations
+Not Applied Migrations
+Missing Migrations
 ```
 
 ## Параметры CLI
 
 - `-command` — `up`, `down`, `status`
-- `-dir` — путь к директории миграций (нужно для `up`/`down`)
-- `-driver` — имя драйвера (сейчас `postgres`)
-- `-dsn` — строка подключения к БД
+- `-dir` — путь к директории миграций (по умолчанию `./migrations`)
+- `-driver` — имя драйвера (по умолчанию `postgres`)
+- `-dsn` — строка подключения к БД (если не задана, собирается из `POSTGRES_*`)
 - `-stages` — сколько стадий откатить (только для `down`, по умолчанию 1)
 - `-timeout` — общий таймаут выполнения
 
@@ -97,7 +99,7 @@ stage=2 migration=20250102120000_add_orders
 
 - `LAMIGRATE_DSN` — строка подключения к БД
 - `LAMIGRATE_DRIVER` — имя драйвера (по умолчанию `postgres`)
-- `LAMIGRATE_MIGRATIONS_DIR` — путь к директории миграций
+- `LAMIGRATE_MIGRATIONS_DIR` — путь к директории миграций (по умолчанию `./migrations`)
 - `POSTGRES_HOST` — хост Postgres (используется если `LAMIGRATE_DSN` не задан)
 - `POSTGRES_PORT` — порт Postgres (по умолчанию `5432`)
 - `POSTGRES_USER` — пользователь Postgres

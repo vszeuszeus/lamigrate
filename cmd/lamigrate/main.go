@@ -584,7 +584,7 @@ func printHelp() {
 Команды:
   up        применить все новые up-миграции в одной транзакции
   down      откатить последние стадии (по умолчанию 1)
-  status    показать применённые миграции
+  status    показать применённые, неприменённые и пропавшие миграции
   create    создать пару файлов миграций (up/down)
   version   показать версию
   help      показать справку
@@ -608,6 +608,7 @@ func printHelp() {
   POSTGRES_DB
   
 Если LAMIGRATE_DSN не задан, DSN собирается из POSTGRES_* (по умолчанию postgres).
+Если LAMIGRATE_MIGRATIONS_DIR не задан, используется ./migrations.
 
 Примеры:
   lamigrate up
