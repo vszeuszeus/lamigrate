@@ -19,7 +19,7 @@ import (
 // Назначение: показывать версию в команде version.
 // version holds the current CLI version.
 // Purpose: print version in the version command.
-var version = "0.1.3"
+var version = "0.1.9"
 
 // main парсит CLI-флаги и запускает нужную команду миграций.
 // Вход: флаги командной строки.
@@ -224,7 +224,7 @@ func runDown(cfg *config, stages int) {
 // Output: prints results or exits on error.
 // Purpose: execute the status command.
 func runStatus(cfg *config) {
-	driver, config := buildConfig(cfg, false)
+	driver, config := buildConfig(cfg, true)
 	ctx, cancel := context.WithTimeout(context.Background(), config.timeout)
 	defer cancel()
 
@@ -233,13 +233,150 @@ func runStatus(cfg *config) {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
-	if len(applied) == 0 {
-		fmt.Println("no migrations applied")
-		return
+
+	migrations, err := lamigrate.ScanMigrations(config.cfg.MigrationsDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
 	}
+
+	appliedSet := make(map[string]struct{}, len(applied))
 	for _, item := range applied {
-		fmt.Printf("stage=%d migration=%s\n", item.Stage, item.Migration)
+		appliedSet[item.Migration] = struct{}{}
 	}
+
+	knownUp := make(map[string]struct{})
+	var pending []string
+	for _, migration := range migrations {
+		if migration.Direction != lamigrate.DirectionUp {
+			continue
+		}
+		knownUp[migration.Key()] = struct{}{}
+		if _, exists := appliedSet[migration.Key()]; exists {
+			continue
+		}
+		pending = append(pending, migration.Key())
+	}
+
+	var missing []string
+	for _, item := range applied {
+		if _, exists := knownUp[item.Migration]; !exists {
+			missing = append(missing, item.Migration)
+		}
+	}
+
+	const (
+		colorGreen = "\033[32m"
+		colorRed   = "\033[31m"
+		colorGray  = "\033[90m"
+		colorReset = "\033[0m"
+	)
+
+	printTitleTable := func(title string, color string) {
+		width := len(title)
+		fmt.Printf("%s+-%s-+%s\n", color, strings.Repeat("-", width), colorReset)
+		fmt.Printf("%s| %s |%s\n", color, title, colorReset)
+		fmt.Printf("%s+-%s-+%s\n", color, strings.Repeat("-", width), colorReset)
+	}
+
+	printAppliedTable := func(rows []lamigrate.AppliedMigration) {
+		headers := []string{"migration", "stage", "executed_at"}
+		colWidths := []int{len(headers[0]), len(headers[1]), len(headers[2])}
+		for _, item := range rows {
+			if len(item.Migration) > colWidths[0] {
+				colWidths[0] = len(item.Migration)
+			}
+			stageStr := strconv.Itoa(item.Stage)
+			if len(stageStr) > colWidths[1] {
+				colWidths[1] = len(stageStr)
+			}
+			executedAt := "unknown"
+			if !item.ExecutedAt.IsZero() {
+				executedAt = item.ExecutedAt.Format(time.RFC3339)
+			}
+			if len(executedAt) > colWidths[2] {
+				colWidths[2] = len(executedAt)
+			}
+		}
+
+		border := fmt.Sprintf("+-%s-+-%s-+-%s-+",
+			strings.Repeat("-", colWidths[0]),
+			strings.Repeat("-", colWidths[1]),
+			strings.Repeat("-", colWidths[2]),
+		)
+
+		fmt.Printf("%s%s%s\n", colorGreen, border, colorReset)
+		fmt.Printf("%s| %-*s | %-*s | %-*s |%s\n",
+			colorGreen,
+			colWidths[0], headers[0],
+			colWidths[1], headers[1],
+			colWidths[2], headers[2],
+			colorReset,
+		)
+		fmt.Printf("%s%s%s\n", colorGreen, border, colorReset)
+
+		if len(rows) == 0 {
+			fmt.Printf("%s| %-*s | %-*s | %-*s |%s\n",
+				colorGreen,
+				colWidths[0], "none",
+				colWidths[1], "-",
+				colWidths[2], "-",
+				colorReset,
+			)
+			fmt.Printf("%s%s%s\n", colorGreen, border, colorReset)
+			return
+		}
+
+		for _, item := range rows {
+			executedAt := "unknown"
+			if !item.ExecutedAt.IsZero() {
+				executedAt = item.ExecutedAt.Format(time.RFC3339)
+			}
+			fmt.Printf("%s| %-*s | %-*d | %-*s |%s\n",
+				colorGreen,
+				colWidths[0], item.Migration,
+				colWidths[1], item.Stage,
+				colWidths[2], executedAt,
+				colorReset,
+			)
+		}
+		fmt.Printf("%s%s%s\n", colorGreen, border, colorReset)
+	}
+
+	printPendingTable := func(rows []string) {
+		header := "migration"
+		width := len(header)
+		for _, name := range rows {
+			if len(name) > width {
+				width = len(name)
+			}
+		}
+
+		border := fmt.Sprintf("+-%s-+", strings.Repeat("-", width))
+		fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
+		fmt.Printf("%s| %-*s |%s\n", colorRed, width, header, colorReset)
+		fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
+
+		if len(rows) == 0 {
+			fmt.Printf("%s| %-*s |%s\n", colorRed, width, "none", colorReset)
+			fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
+			return
+		}
+
+		for _, name := range rows {
+			fmt.Printf("%s| %-*s |%s\n", colorRed, width, name, colorReset)
+		}
+		fmt.Printf("%s%s%s\n", colorRed, border, colorReset)
+	}
+
+	printTitleTable("AppliedMIgrations", colorGreen)
+	printAppliedTable(applied)
+	fmt.Println()
+	printTitleTable("Not Applied Migrations", colorRed)
+	printPendingTable(pending)
+	fmt.Println()
+	printTitleTable("Missing Migrations", colorGray)
+	printPendingTable(missing)
 }
 
 // runCreate создаёт пару файлов миграции (up/down) с текущей меткой времени.

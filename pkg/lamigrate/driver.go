@@ -3,6 +3,7 @@ package lamigrate
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 // Driver определяет операции для конкретной БД.
@@ -27,6 +28,7 @@ type Driver interface {
 // AppliedMigration is a stored migration record with stage.
 // Purpose: return applied migrations for status/planning.
 type AppliedMigration struct {
-	Migration string
-	Stage     int
+	Migration  string
+	Stage      int
+	ExecutedAt time.Time
 }

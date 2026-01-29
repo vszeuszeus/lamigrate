@@ -75,11 +75,33 @@ func (d *Driver) EnsureSchema(ctx context.Context, db *sql.DB) error {
 CREATE TABLE IF NOT EXISTS lamigrate (
 	id BIGSERIAL PRIMARY KEY,
 	migration TEXT NOT NULL UNIQUE,
-	stage INT NOT NULL
+	stage INT NOT NULL,
+	executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );`
 	_, err := db.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("create lamigrate table: %w", err)
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE lamigrate ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`)
+	if err != nil {
+		return fmt.Errorf("add lamigrate executed_at column: %w", err)
+	}
+	_, err = db.ExecContext(ctx, `
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1
+		FROM information_schema.columns
+		WHERE table_name = 'lamigrate' AND column_name = 'executed_date'
+	) THEN
+		UPDATE lamigrate
+		SET executed_at = executed_date
+		WHERE executed_at IS NULL AND executed_date IS NOT NULL;
+	END IF;
+END $$;
+`)
+	if err != nil {
+		return fmt.Errorf("backfill lamigrate executed_at: %w", err)
 	}
 	return nil
 }
@@ -93,7 +115,7 @@ CREATE TABLE IF NOT EXISTS lamigrate (
 // Output: list of AppliedMigration or error.
 // Purpose: show status and detect pending migrations.
 func (d *Driver) AppliedMigrations(ctx context.Context, db *sql.DB) ([]lamigrate.AppliedMigration, error) {
-	rows, err := db.QueryContext(ctx, `SELECT migration, stage FROM lamigrate ORDER BY stage ASC, id ASC`)
+	rows, err := db.QueryContext(ctx, `SELECT migration, stage, executed_at FROM lamigrate ORDER BY stage ASC, id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -103,13 +125,15 @@ func (d *Driver) AppliedMigrations(ctx context.Context, db *sql.DB) ([]lamigrate
 	for rows.Next() {
 		var migration string
 		var stage int
-		if err := rows.Scan(&migration, &stage); err != nil {
+		var executedAt sql.NullTime
+		if err := rows.Scan(&migration, &stage, &executedAt); err != nil {
 			return nil, err
 		}
 
 		applied = append(applied, lamigrate.AppliedMigration{
-			Migration: migration,
-			Stage:     stage,
+			Migration:  migration,
+			Stage:      stage,
+			ExecutedAt: executedAt.Time,
 		})
 	}
 
@@ -230,7 +254,7 @@ func (d *Driver) WithTransaction(ctx context.Context, db *sql.DB, fn func(*sql.T
 func (d *Driver) InsertMigration(ctx context.Context, tx *sql.Tx, migrationName string, stage int) error {
 	_, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO lamigrate (migration, stage) VALUES ($1, $2)`,
+		`INSERT INTO lamigrate (migration, stage, executed_at) VALUES ($1, $2, NOW())`,
 		migrationName,
 		stage,
 	)
